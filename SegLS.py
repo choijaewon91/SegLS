@@ -25,24 +25,47 @@ def lpc(y, p):
     #g = np.var( sp.linalg.solve_toeplitz(c[:p],r[:p]).dot(a)+c[1:p+1] )
     
     a = np.concatenate(([1],a))
-    
-    
     return a,g
-
+        
+def lpc_rls(y,p,alpha):
+    w = np.zeros((p,))
+    x_in = np.zeros((p,))
+    P = y[0]**2*np.eye(p)
+    e = np.zeros((len(y),))
+    e_var = np.zeros((len(y),))
+    
+    e[0] = y[0] - x_in.dot(w)    
+    e_var[0] = 0
+    for i in np.arange(1,len(y)):
+        x_in[1:] = x_in[0:-1]
+        x_in[0] = y[i-1]
+        e[i] = y[i] - x_in.dot(w)
+        Px = P.dot(x_in)
+        g = Px/(alpha+x_in.dot(Px))
+        
+        P[:,:] = 1/alpha * (P[:,:]-np.outer(g,Px)) 
+        w[:] = w[:] + alpha*g[:]
+        P = 1/2*(P.T+P)
+        
+        e_var[i] = np.var(e[:i+1])
+    return w, e_var
 
 x = np.random.randn(128)
 ###################for debugging
-# from_matlab= loadmat('data.mat')
-# x= from_matlab['x'].flatten()
+from_matlab= loadmat('data.mat')
+x= from_matlab['x'].flatten()
 ##################
 plt.figure()
 plt.plot(x)
 plt.show()
 
-a=np.array([[1, -0.9, 0.4],
-            [1, 0.9, 0.2],
-            [1, -0.99, 0.5]])
+# a=np.array([[1, -0.9, 0.4],
+#             [1, 0.9, 0.2],
+#             [1, -0.99, 0.5]])
 
+a=np.array([[1, -0.9],
+            [1, 0.9],
+            [1, -0.99]])
 y= np.array([])
 
 for i in np.arange(np.shape(a)[0]):
@@ -84,15 +107,26 @@ plt.plot(ahat[1,:])
 plt.show()
 #%%Calculate the pair-wise errors
 E = np.zeros((N,N))
+#using Levinson_Durbin LPC
+# for i in np.arange(N):
+#     for j in np.arange(N):
+#         if(j-i+1>mo):
+#             [a,g] =  lpc(y[i:j+1],mo)
+#             E[i,j]= g*(j-i+1)
+#         else:
+#             E[i,j] = np.sum(y[i:j+1]**2)
+#     if(i%100 == 0):
+#         print('E iter: ' + str(i))
+
+# Using RLS lpc
 for i in np.arange(N):
-    for j in np.arange(N):
-        if(j-i+1>mo):
-            [a,g] =  lpc(y[i:j+1],mo)
-            E[i,j]= g*(j-i+1)
-        else:
-            E[i,j] = np.sum(y[i:j+1]**2)
+    [aa, g] = lpc_rls(y[i:],mo,1)
+    
+    E[i,i:i+mo] = np.cumsum(y[i:i+mo]**2)
+    E[i,i+mo:] = g[mo:]*np.arange(mo+1,N-i+1)
     if(i%100 == 0):
         print('E iter: ' + str(i))
+
 
 M = np.zeros((N,))
 MI = np.zeros((N,),dtype = 'int32')
@@ -103,6 +137,13 @@ for j in np.arange(N):
     cost = E[:j+1,j] + Const + np.concatenate(([0],M[:j]) )
     MI[j] = np.argmin(cost)
     M[j]=cost[MI[j]]
+j = N-1
+Seg = np.zeros((N,))
+while(j>0):
+    if(MI[j]>j):
+        print("MI[j]>j")
+    Seg[j:MI[j]-1:-1] = MI[j]
+    j = MI[j]-1
 
 #Seguentially achievable:
 T = np.zeros((N,))
@@ -155,6 +196,7 @@ plt.show()
 plt.figure()
 plt.plot(y, label = 'switching AR(2) process' )
 plt.plot(MI/50,label = 'optimal segmented least squares')
+plt.plot(Seg/50,label = 'optimal segmented least squares')
 plt.plot(-MMI/50, label = 'sequential segmented least squares')
 plt.legend()
 plt.xlabel('Samples')
