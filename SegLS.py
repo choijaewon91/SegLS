@@ -35,7 +35,7 @@ def lpc_rls(y,p,alpha):
     e_var = np.zeros((len(y),))
     
     e[0] = y[0] - x_in.dot(w)    
-    e_var[0] = 0
+    e_var[0] = e[0]**2
     for i in np.arange(1,len(y)):
         x_in[1:] = x_in[0:-1]
         x_in[0] = y[i-1]
@@ -44,10 +44,12 @@ def lpc_rls(y,p,alpha):
         g = Px/(alpha+x_in.dot(Px))
         
         P[:,:] = 1/alpha * (P[:,:]-np.outer(g,Px)) 
-        w[:] = w[:] + alpha*g[:]
+        w[:] = w[:] + e[i]*g[:]
+        
+        
         P = 1/2*(P.T+P)
         
-        e_var[i] = np.var(e[:i+1])
+        e_var[i] = e_var[i-1]+e[i]**2
     return w, e_var
 
 x = np.random.randn(128)
@@ -123,7 +125,7 @@ for i in np.arange(N):
     [aa, g] = lpc_rls(y[i:],mo,1)
     
     E[i,i:i+mo] = np.cumsum(y[i:i+mo]**2)
-    E[i,i+mo:] = g[mo:]*np.arange(mo+1,N-i+1)
+    E[i,i+mo:] = g[mo:]
     if(i%100 == 0):
         print('E iter: ' + str(i))
 
