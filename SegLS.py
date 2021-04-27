@@ -46,28 +46,29 @@ def lpc_rls(y,p,alpha):
         P[:,:] = 1/alpha * (P[:,:]-np.outer(g,Px)) 
         w[:] = w[:] + e[i]*g[:]
         
-        
+        e[i] -= x_in.dot(e[i]*g[:])
         P = 1/2*(P.T+P)
-        
         e_var[i] = e_var[i-1]+e[i]**2
     return w, e_var
 
 x = np.random.randn(128)
 ###################for debugging
-from_matlab= loadmat('data.mat')
-x= from_matlab['x'].flatten()
+# from_matlab= loadmat('data.mat')
+# x= from_matlab['x'].flatten()
 ##################
 plt.figure()
 plt.plot(x)
 plt.show()
-
+a=np.array([[1, -0.9, 0.4, -0.1],
+            [1, 0.9, 0.2, 0.2],
+            [1, -0.99, 0.5, 0.3]])
 # a=np.array([[1, -0.9, 0.4],
 #             [1, 0.9, 0.2],
 #             [1, -0.99, 0.5]])
 
-a=np.array([[1, -0.9],
-            [1, 0.9],
-            [1, -0.99]])
+# a=np.array([[1, -0.9],
+#             [1, 0.9],
+#             [1, -0.99]])
 y= np.array([])
 
 for i in np.arange(np.shape(a)[0]):
@@ -104,8 +105,8 @@ for i in np.arange(N):
     if(i%100 == 0):
         print('RLS iter:' + str(i))
 plt.figure()
-plt.plot(ahat[0,:])
-plt.plot(ahat[1,:])
+for i in np.arange(mo):
+    plt.plot(ahat[i,:])
 plt.show()
 #%%Calculate the pair-wise errors
 E = np.zeros((N,N))
@@ -132,7 +133,7 @@ for i in np.arange(N):
 
 M = np.zeros((N,))
 MI = np.zeros((N,),dtype = 'int32')
-Const = 6*np.var(y)
+Const = (mo+1)*np.var(y)
 
 #Batch Segmented LS
 for j in np.arange(N):
@@ -152,6 +153,7 @@ T = np.zeros((N,))
 TI = np.zeros((N,),dtype = 'int32')
 MM = np.zeros((N,))
 MMI = np.zeros((N,),dtype = 'int32')
+# Const = 1/mo*Const
 
 for i in np.arange(N):
     for j in np.arange(i+1):
