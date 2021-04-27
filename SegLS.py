@@ -51,6 +51,43 @@ def lpc_rls(y,p,alpha):
         e_var[i] = e_var[i-1]+e[i]**2
     return w, e_var
 
+
+def recursive_MMSE(y_in, p):
+    N = len(y_in)
+    
+    A_r = np.zeros((N-1,))
+    A_r[:] = y_in[0:-1]
+    A_c = np.zeros((p,))
+    A_c[0] = y_in[0]
+    A = sp.linalg.toeplitz(A_r, A_c)
+    var_e = np.zeros((N,)) 
+    var_e[0]= y_in[0]**2
+    
+    
+    y = y_in[1:]
+    for i in np.arange(N-1):
+        if(i<p-1):
+             var_e[i+1] = var_e[i]+y[i]**2
+        elif(i==p-1):
+            P = np.linalg.lstsq( A[:i+1,:].T.dot(A[:i+1,:]), np.eye(p), rcond=None )[0]
+            var_e[i+1] = var_e[0] + y[:i+1].dot(y[:i+1]) - y[:i+1].dot( A[:i+1,:].dot( P.dot( A[:i+1,:].T.dot( y[:i+1]) ) ) )
+        else:
+            Py = P.dot(A[i,:])
+            ATb = A[:i+1,:].T.dot(y[:i+1])
+
+            newP = P - 1/(1+A[i,:].dot(Py))*(np.outer(Py,Py))
+            newP = 1/2*(newP.T+newP)
+                       
+            err_term1 = y[i]**2
+            err_term2 = -(2*y[i]*A[:i,:].T.dot(y[:i]) +  y[i]**2*A[i,:]).dot(Py)
+            err_term3 = ATb.dot( (P-newP).dot(ATb) )
+            
+            P = newP
+            var_e[i+1] = var_e[i] + err_term1 + err_term2 + err_term3
+        
+    return var_e
+    
+
 x = np.random.randn(128)
 ###################for debugging
 # from_matlab= loadmat('data.mat')
@@ -59,16 +96,16 @@ x = np.random.randn(128)
 plt.figure()
 plt.plot(x)
 plt.show()
-a=np.array([[1, -0.9, 0.4, -0.1],
-            [1, 0.9, 0.2, 0.2],
-            [1, -0.99, 0.5, 0.3]])
+# a=np.array([[1, -0.9, 0.4, -0.1],
+#             [1, 0.9, 0.2, 0.2],
+#             [1, -0.99, 0.5, 0.3]])
 # a=np.array([[1, -0.9, 0.4],
 #             [1, 0.9, 0.2],
 #             [1, -0.99, 0.5]])
 
-# a=np.array([[1, -0.9],
-#             [1, 0.9],
-#             [1, -0.99]])
+a=np.array([[1, -0.9],
+            [1, 0.9],
+            [1, -0.99]])
 y= np.array([])
 
 for i in np.arange(np.shape(a)[0]):
@@ -80,7 +117,7 @@ plt.show()
 
 
 N = len(y)
-mo = 3
+mo = 2
 C = np.zeros((1,mo))
 R= np.eye(mo)
 alpha = 0.99
@@ -123,8 +160,8 @@ E = np.zeros((N,N))
 
 # Using RLS lpc
 for i in np.arange(N):
-    [aa, g] = lpc_rls(y[i:],mo,1)
-    
+    #[aa, g] = lpc_rls(y[i:],mo,1)
+    g = recursive_MMSE(y[i:], mo)
     E[i,i:i+mo] = np.cumsum(y[i:i+mo]**2)
     E[i,i+mo:] = g[mo:]
     if(i%100 == 0):
@@ -133,7 +170,7 @@ for i in np.arange(N):
 
 M = np.zeros((N,))
 MI = np.zeros((N,),dtype = 'int32')
-Const = (mo+1)*np.var(y)
+Const = (mo+1)**2*np.var(y)
 
 #Batch Segmented LS
 for j in np.arange(N):
