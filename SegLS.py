@@ -70,7 +70,9 @@ def recursive_MMSE(y_in, p):
              var_e[i+1] = var_e[i]+y[i]**2
         elif(i==p-1):
             P = np.linalg.lstsq( A[:i+1,:].T.dot(A[:i+1,:]), np.eye(p), rcond=None )[0]
-            var_e[i+1] = var_e[0] + y[:i+1].dot(y[:i+1]) - y[:i+1].dot( A[:i+1,:].dot( P.dot( A[:i+1,:].T.dot( y[:i+1]) ) ) )
+            err_term1 =  y[:i+1].dot(y[:i+1])
+            err_term2 =  A[:i+1,:].T.dot( y[:i+1])
+            var_e[i+1] = err_term1 - err_term2.dot(P.dot(err_term2))
         else:
             Py = P.dot(A[i,:])
             ATb = A[:i+1,:].T.dot(y[:i+1])
@@ -78,12 +80,11 @@ def recursive_MMSE(y_in, p):
             newP = P - 1/(1+A[i,:].dot(Py))*(np.outer(Py,Py))
             newP = 1/2*(newP.T+newP)
                        
-            err_term1 = y[i]**2
-            err_term2 = -(2*y[i]*A[:i,:].T.dot(y[:i]) +  y[i]**2*A[i,:]).dot(Py)
-            err_term3 = ATb.dot( (P-newP).dot(ATb) )
+            err_term1 += y[i]**2
+            err_term2 = ATb.dot( (newP).dot(ATb) )
             
             P = newP
-            var_e[i+1] = var_e[i] + err_term1 + err_term2 + err_term3
+            var_e[i+1] = err_term1 - err_term2
         
     return var_e
     
@@ -96,16 +97,16 @@ x = np.random.randn(128)
 plt.figure()
 plt.plot(x)
 plt.show()
-# a=np.array([[1, -0.9, 0.4, -0.1],
-#             [1, 0.9, 0.2, 0.2],
-#             [1, -0.99, 0.5, 0.3]])
+a=np.array([[1, -0.9, 0.4, -0.1],
+            [1, 0.9, 0.2, 0.2],
+            [1, -0.99, 0.5, 0.3]])
 # a=np.array([[1, -0.9, 0.4],
 #             [1, 0.9, 0.2],
 #             [1, -0.99, 0.5]])
 
-a=np.array([[1, -0.9],
-            [1, 0.9],
-            [1, -0.99]])
+# a=np.array([[1, -0.9],
+#             [1, 0.9],
+#             [1, -0.99]])
 y= np.array([])
 
 for i in np.arange(np.shape(a)[0]):
@@ -117,7 +118,7 @@ plt.show()
 
 
 N = len(y)
-mo = 2
+mo = 3
 C = np.zeros((1,mo))
 R= np.eye(mo)
 alpha = 0.99
@@ -170,7 +171,7 @@ for i in np.arange(N):
 
 M = np.zeros((N,))
 MI = np.zeros((N,),dtype = 'int32')
-Const = (mo+1)**2*np.var(y)
+Const = (mo+1)*np.var(y)
 
 #Batch Segmented LS
 for j in np.arange(N):
@@ -211,7 +212,7 @@ for i in np.arange(N):
     else:
         C = np.zeros((1,mo))
 
-    if(i > 0 and ( (MMI[i]-MMI[i-1]) > 2 ) ):
+    if(i > 0 and ( (MMI[i]-MMI[i-1]) > 10 ) ):
         R = C.T.dot(C)+np.eye(mo)
     else:
         R = alpha*R + C.T.dot(C)
