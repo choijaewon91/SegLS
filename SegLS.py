@@ -27,28 +27,41 @@ def lpc(y, p):
     a = np.concatenate(([1],a))
     return a,g
         
-def lpc_rls(y,p,alpha):
+def lpc_rls(y,p,alpha, y0 = None, P = None):
     w = np.zeros((p,))
     x_in = np.zeros((p,))
-    P = y[0]**2*np.eye(p)
+    
+    if(P is None):
+        P = y[0]**2*np.eye(p)
+    if(y0 is not None):
+        x_in[:] = y0
+        
     e = np.zeros((len(y),))
     e_var = np.zeros((len(y),))
     
     e[0] = y[0] - x_in.dot(w)    
     e_var[0] = e[0]**2
+    
+    y_sqrd_sum = y[0]**2
+    Ab = np.zeros((p,))
     for i in np.arange(1,len(y)):
         x_in[1:] = x_in[0:-1]
         x_in[0] = y[i-1]
+         
         e[i] = y[i] - x_in.dot(w)
+        
         Px = P.dot(x_in)
         g = Px/(alpha+x_in.dot(Px))
-        
-        P[:,:] = 1/alpha * (P[:,:]-np.outer(g,Px)) 
         w[:] = w[:] + e[i]*g[:]
         
-        e[i] -= x_in.dot(e[i]*g[:])
+        y_sqrd_sum += y[i]**2
+        Ab += y[i]*x_in[:]
+        
+        
+        P[:,:] = 1/alpha * (P[:,:]-np.outer(g,Px)) 
         P = 1/2*(P.T+P)
-        e_var[i] = e_var[i-1]+e[i]**2
+        
+        e_var[i] = y_sqrd_sum - Ab.dot(P.dot(Ab))
     return w, e_var
 
 
@@ -161,8 +174,8 @@ E = np.zeros((N,N))
 
 # Using RLS lpc
 for i in np.arange(N):
-    #[aa, g] = lpc_rls(y[i:],mo,1)
-    g = recursive_MMSE(y[i:], mo)
+    [aa, g] = lpc_rls(y[i:],mo,1)
+    # g = recursive_MMSE(y[i:], mo)
     E[i,i:i+mo] = np.cumsum(y[i:i+mo]**2)
     E[i,i+mo:] = g[mo:]
     if(i%100 == 0):
