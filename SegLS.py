@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sp
 import scipy.signal as signal
 from scipy.io import loadmat
+import RLS_SUB as RS
 
 import matplotlib.pyplot as plt
 
@@ -159,6 +160,14 @@ plt.figure()
 for i in np.arange(mo):
     plt.plot(ahat[i,:])
 plt.show()
+
+[w, _, _]= RS.RLS_batch( np.concatenate(([0], y[0:-1])), y[:], mo, alpha)
+
+plt.figure()
+for i in np.arange(mo):
+    plt.plot(w[:,i])
+plt.show()
+
 #%%Calculate the pair-wise errors
 E = np.zeros((N,N))
 #using Levinson_Durbin LPC
@@ -174,12 +183,15 @@ E = np.zeros((N,N))
 
 # Using RLS lpc
 for i in np.arange(N):
-    [aa, g] = lpc_rls(y[i:],mo,1)
-    # g = recursive_MMSE(y[i:], mo)
-    E[i,i:i+mo] = np.cumsum(y[i:i+mo]**2)
-    E[i,i+mo:] = g[mo:]
+    # [aa, g] = lpc_rls(y[i:],mo,1)
+    # # g = recursive_MMSE(y[i:], mo)
+    # E[i,i:i+mo] = np.cumsum(y[i:i+mo]**2)
+    # E[i,i+mo:] = g[mo:]
+    
+    E[i,i:] = RS.LSE_batch(np.concatenate(([0], y[i:-1])), y[i:], mo)
     if(i%100 == 0):
         print('E iter: ' + str(i))
+
 
 
 M = np.zeros((N,))
