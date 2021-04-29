@@ -122,10 +122,10 @@ a=np.array([[1, -0.9, 0.4, -0.1],
 #             [1, 0.9],
 #             [1, -0.99]])
 y= np.array([])
-
+print('True partition:')
 for i in np.arange(np.shape(a)[0]):
     y = np.concatenate((y,signal.lfilter([1.0],a[i,:],x)) )
-
+    print('    '+str(len(y)))    
 plt.figure()
 plt.plot(y.flatten())
 plt.show()
@@ -139,29 +139,29 @@ alpha = 0.99
 ahat=np.zeros((mo,N))
 yhat = np.zeros((N,))
 #%%RLS
-for i in np.arange(N):
-    if( i >= mo ):
-        C[:] = y[i-mo:i].reshape((1,-1))
-    else:
-        C[:] = np.zeros((1,mo))
+# for i in np.arange(N):
+#     if( i >= mo ):
+#         C[:] = y[i-mo:i].reshape((1,-1))
+#     else:
+#         C[:] = np.zeros((1,mo))
 
-    R = alpha*R + C.T.dot(C)
+#     R = alpha*R + C.T.dot(C)
 
-    if(i>=mo-1):
-        yhat[i] = np.dot(C,ahat[:,i-1])
-        ahat[:,i] = ahat[:,i-1]+np.linalg.lstsq(R,C.flatten()*(y[i]-yhat[i]),rcond=None)[0]
-    else:
-        yhat[i] = 0
-        ahat[:,i] = np.linalg.lstsq( R,C.flatten()*(y[i]-yhat[i]) ,rcond=None)[0]
+#     if(i>=mo-1):
+#         yhat[i] = np.dot(C,ahat[:,i-1])
+#         ahat[:,i] = ahat[:,i-1]+np.linalg.lstsq(R,C.flatten()*(y[i]-yhat[i]),rcond=None)[0]
+#     else:
+#         yhat[i] = 0
+#         ahat[:,i] = np.linalg.lstsq( R,C.flatten()*(y[i]-yhat[i]) ,rcond=None)[0]
 
-    if(i%100 == 0):
-        print('RLS iter:' + str(i))
-plt.figure()
-for i in np.arange(mo):
-    plt.plot(ahat[i,:])
-plt.show()
+#     if(i%100 == 0):
+#         print('RLS iter:' + str(i))
+# plt.figure()
+# for i in np.arange(mo):
+#     plt.plot(ahat[i,:])
+# plt.show()
 
-[w, _, _]= RS.RLS_batch( np.concatenate(([0], y[0:-1])), y[:], mo, alpha)
+[w, e_rls, lse_rls]= RS.RLS_batch( np.concatenate(([0], y[0:-1])), y[:], mo, alpha)
 
 plt.figure()
 for i in np.arange(mo):
@@ -170,17 +170,7 @@ plt.show()
 
 #%%Calculate the pair-wise errors
 E = np.zeros((N,N))
-#using Levinson_Durbin LPC
-# for i in np.arange(N):
-#     for j in np.arange(N):
-#         if(j-i+1>mo):
-#             [a,g] =  lpc(y[i:j+1],mo)
-#             E[i,j]= g*(j-i+1)
-#         else:
-#             E[i,j] = np.sum(y[i:j+1]**2)
-#     if(i%100 == 0):
-#         print('E iter: ' + str(i))
-
+Const = (mo+1)*np.var(y)
 # Using RLS lpc
 for i in np.arange(N):
     # [aa, g] = lpc_rls(y[i:],mo,1)
@@ -191,25 +181,20 @@ for i in np.arange(N):
     E[i,i:] = RS.LSE_batch(np.concatenate(([0], y[i:-1])), y[i:], mo)
     if(i%100 == 0):
         print('E iter: ' + str(i))
+#MY SLS
+
+[seg, w, e] = RS.Segmented_LS(np.concatenate(([0], y[:-1])), y[:], mo, Const)
+
+MI = np.zeros((N,))
+for i in np.arange(1,len(seg)):
+    MI[seg[i-1]:seg[i]]=seg[i-1]
+
+sls_lse = np.cumsum(e**2)
+print('segmented RLS partition')
+print(seg)
 
 
 
-M = np.zeros((N,))
-MI = np.zeros((N,),dtype = 'int32')
-Const = (mo+1)*np.var(y)
-
-#Batch Segmented LS
-for j in np.arange(N):
-    cost = E[:j+1,j] + Const + np.concatenate(([0],M[:j]) )
-    MI[j] = np.argmin(cost)
-    M[j]=cost[MI[j]]
-j = N-1
-Seg = np.zeros((N,))
-while(j>0):
-    if(MI[j]>j):
-        print("MI[j]>j")
-    Seg[j:MI[j]-1:-1] = MI[j]
-    j = MI[j]-1
 
 #Seguentially achievable:
 T = np.zeros((N,))
@@ -231,13 +216,15 @@ alpha = 0.99
 ahat2 = np.zeros((mo,N))
 yhat2 = np.zeros((N,))
 R = np.eye(mo)
+print('Sequential RLS partition')
 for i in np.arange(N):
     if(i>=mo):
         C = y[i-mo:i].reshape((1,-1))
     else:
         C = np.zeros((1,mo))
 
-    if(i > 0 and ( (MMI[i]-MMI[i-1]) > 10 ) ):
+    if(i > 0 and ( (MMI[i]-MMI[i-1]) > 20 ) ):
+        print('    '+str(i))   
         R = C.T.dot(C)+np.eye(mo)
     else:
         R = alpha*R + C.T.dot(C)
@@ -254,6 +241,7 @@ for i in np.arange(N):
 plt.figure()
 plt.plot(np.cumsum((y-yhat)**2)/np.arange(1,N+1),label = 'RLS memory 0.99')
 plt.plot(np.cumsum((y-yhat2)**2)/np.arange(1,N+1),label = 'Segmented RLS-informed RLS memory 0.99')
+plt.plot(sls_lse/np.arange(1,N+1),label = 'Optimal Segmented LS' )
 plt.legend()
 plt.xlabel('Samples')
 plt.ylabel('Mean Squared Accumulated Prediction Error')
@@ -263,7 +251,6 @@ plt.show()
 plt.figure()
 plt.plot(y, label = 'switching AR(2) process' )
 plt.plot(MI/50,label = 'optimal segmented least squares')
-plt.plot(Seg/50,label = 'optimal segmented least squares')
 plt.plot(-MMI/50, label = 'sequential segmented least squares')
 plt.legend()
 plt.xlabel('Samples')

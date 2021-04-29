@@ -1,5 +1,5 @@
 import numpy as np
-import scipy as np
+import scipy as sp
 
 
 def LSE_step(x, d, P, dd, Xd, alpha):
@@ -44,15 +44,15 @@ def Segmented_LS_Find_Segment(MI):
         j = MI[j]-1
         i+=1
         
-    return Seg[i-1::-1]
+    return Seg[i-1::-1].astype('int32')
     
 
 def Segmented_LS_Bellman_batch(E, seg_penalty):
     N = np.shape(E)[0]
     M = np.zeros((N,))
-    MI = np.zeros((N,))
+    MI = np.zeros((N,),dtype= 'int32')
     for i in np.arange(N):
-        [M[i], MI[i]] = Segmented_LS_Bellman_step(E[i,:i+1], seg_penalty, MI[:i])
+        [M[i], MI[i]] = Segmented_LS_Bellman_step(E[:i+1,i], seg_penalty, M[:i])
     return M, MI
 
 
@@ -118,26 +118,53 @@ def RLS_batch(x, d, p, alpha, x0=None, P0 = None, w0 = None):
 def Segmented_LS(x, d, p, seg_penalty, x0 = None, verbose = False):
     if(len(x) != len(d)):
         print("RLS_batch: Current version only allows len(x)=len(d)")    
+    
+    N = len(x)
+    ##PART1. Find segments
     x_init = np.zeros((p,))
-
     if(x0 is not None):
         x_init[:] = x0[:]
-    N = len(x)
+    
     E = np.zeros((N,N))
-    
-    
+
     for i in np.arange(N):
         
         E[i,i:] = LSE_batch(x[i:], d[i:], p, x0 = x_init)
         x_init[1:] = x_init[:-1]
-        x_init[1:] = x[i]
+        x_init[0] = x[i]
         
         if(i%100 == 0 and verbose):
-            print('E iter: ' + str(i))
+            print('Segmented_LS - E iter: ' + str(i))
             
     [M, MI] = Segmented_LS_Bellman_batch(E, seg_penalty)
     seg = Segmented_LS_Find_Segment(MI)
-    #####UNDERCONSTRUCTION#####################
+    
+    ##PART2 get filter coeff and error
+    seg_start_idx = 0
+    A_r = np.zeros((p,))
+    if(x0 is not None):
+        A_r = x0[:]
+    w = np.zeros((len(seg),p))
+    e = np.zeros((N,))
+    for i in np.arange(1,len(seg)):
+        seg_start_idx = seg[i-1]
+        seg_end_idx = seg[i]
+        
+        A_r[1:] = A_r[:-1]
+        A_r[0] = x[seg_start_idx]
+        
+        A_c = x[seg_start_idx:seg_end_idx]
+        A = sp.linalg.toeplitz(A_c,A_r)
+        w[i,:] = np.linalg.lstsq(A,d[seg_start_idx:seg_end_idx],rcond = None)[0]
+        e[seg_start_idx:seg_end_idx] = d[seg_start_idx:seg_end_idx] - np.convolve( np.concatenate((A_r[p-1:0:-1],A_c)), w[i,:], mode = 'valid' )
+        
+        
+        A_r[:] = x[seg_end_idx-1:seg_end_idx-p-1:-1 ]
+            
+        
+    return seg, w, e
+
+
     
     
     
