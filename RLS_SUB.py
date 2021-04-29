@@ -115,7 +115,7 @@ def RLS_batch(x, d, p, alpha, x0=None, P0 = None, w0 = None):
     return w[1:,:], e, lse
     
 
-def Segmented_LS(x, d, p, seg_penalty, x0 = None, verbose = False):
+def Segmented_LS(x, d, p, seg_penalty, alpha, x0 = None, verbose = False):
     if(len(x) != len(d)):
         print("RLS_batch: Current version only allows len(x)=len(d)")    
     
@@ -144,27 +144,82 @@ def Segmented_LS(x, d, p, seg_penalty, x0 = None, verbose = False):
     A_r = np.zeros((p,))
     if(x0 is not None):
         A_r = x0[:]
-    w = np.zeros((len(seg),p))
+    #w = np.zeros((len(seg),p))
+    w = np.zeros((N,p))
     e = np.zeros((N,))
+    x_init = np.zeros((p,))
+    if(x0 is not None):
+        x_init[:] = x0[:]
     for i in np.arange(1,len(seg)):
         seg_start_idx = seg[i-1]
         seg_end_idx = seg[i]
+        [w[seg_start_idx:seg_end_idx,:], e[seg_start_idx:seg_end_idx], _] = RLS_batch(x[seg_start_idx:seg_end_idx], d[seg_start_idx:seg_end_idx], p, alpha, x0 = x_init)
+        x_init[:] = x[seg_end_idx-1:seg_end_idx-1-p:-1]
         
-        A_r[1:] = A_r[:-1]
-        A_r[0] = x[seg_start_idx]
+        # A_r[1:] = A_r[:-1]
+        # A_r[0] = x[seg_start_idx]
         
-        A_c = x[seg_start_idx:seg_end_idx]
-        A = sp.linalg.toeplitz(A_c,A_r)
-        w[i,:] = np.linalg.lstsq(A,d[seg_start_idx:seg_end_idx],rcond = None)[0]
-        e[seg_start_idx:seg_end_idx] = d[seg_start_idx:seg_end_idx] - np.convolve( np.concatenate((A_r[p-1:0:-1],A_c)), w[i,:], mode = 'valid' )
+        # A_c = x[seg_start_idx:seg_end_idx]
+        # A = sp.linalg.toeplitz(A_c,A_r)
+        # w[i,:] = np.linalg.lstsq(A,d[seg_start_idx:seg_end_idx],rcond = None)[0]
+        # e[seg_start_idx:seg_end_idx] = d[seg_start_idx:seg_end_idx] - np.convolve( np.concatenate((A_r[p-1:0:-1],A_c)), w[i,:], mode = 'valid' )
         
         
-        A_r[:] = x[seg_end_idx-1:seg_end_idx-p-1:-1 ]
+        # A_r[:] = x[seg_end_idx-1:seg_end_idx-p-1:-1 ]
             
         
     return seg, w, e
 
 
+def Sequential_Segmented_RLS(x, d, p, seg_penalty, seg_threshold, alpha, x0=None, P0 = None, w0 = None, verbose = False):
+    if(len(x) != len(d)):
+        print("RLS_batch: Current version only allows len(x)=len(d)")    
     
+    N = len(x)
+    x_arr = np.zeros((p,))
+    P = np.zeros((N,p,p))
+    P[:,:,:] = np.eye(p)
+    dd = np.zeros((N))
+    Xd = np.zeros((N,p))
     
+    w = np.zeros((N+1,p))
+    e = np.zeros((N,))
+    ##PART1. Find segments
+    if(x0 is not None):
+        x_arr[:] = x0[:]
+    if(P0 is not None):
+        P[:,:,:] = P0
+    if(w0 is not None):
+        w[:] = w0[:]    
     
+    E = np.zeros((N,N))
+    M = np.zeros((N,))
+    MI = np.zeros((N,),dtype='int32')
+    seg = np.zeros((N,),dtype='int32')
+    N_seg = 1
+    seg_start = seg[0]
+    for j in np.arange(N):
+        x_arr[1:] = x_arr[:-1]
+        x_arr[0] = x[j]
+        
+        
+        #reset RLS
+        if((j-seg_start) > 1 and  (MI[j-1]-MI[j-2] >  seg_threshold) ):
+            seg_start = j
+            seg[N_seg] = seg_start
+            N_seg+=1
+        #information from segmented LS        
+        for i in np.arange(j,seg_start-1,-1):#np.arange(j+1):     
+            [E[i,j], g_0, P[i,:,:], dd[i], Xd[i,:]] = LSE_step(x_arr, d[j], P[i,:,:], dd[i], Xd[i,:], 0.99)
+            if(i==seg_start):
+                g = g_0
+        
+        [M[j], MI[j]] = Segmented_LS_Bellman_step(E[seg_start:j+1,j], seg_penalty, M[seg_start:j])
+        MI[j]=MI[j]+seg_start
+        #[M[j], MI[j]] = Segmented_LS_Bellman_step(E[:j+1,j], seg_penalty, M[:j])
+
+        e[j] = d[j]-w[j,:].dot(x_arr)
+        w[j+1,:] = w[j,:]+e[j]*g
+        e[j] = (1 - g.dot(x_arr))*e[j]
+    seg[N_seg] = N
+    return w[1:,:], e, seg[:N_seg+1]

@@ -103,7 +103,7 @@ def recursive_MMSE(y_in, p):
     return var_e
     
 
-x = np.random.randn(128)
+x = np.random.randn(256)
 ###################for debugging
 # from_matlab= loadmat('data.mat')
 # x= from_matlab['x'].flatten()
@@ -183,15 +183,17 @@ for i in np.arange(N):
         print('E iter: ' + str(i))
 #MY SLS
 
-[seg, w, e] = RS.Segmented_LS(np.concatenate(([0], y[:-1])), y[:], mo, Const)
+[seg, w, e] = RS.Segmented_LS(np.concatenate(([0], y[:-1])), y[:], mo, Const,alpha)
 
 MI = np.zeros((N,))
+print('Segmented RLS partition')
 for i in np.arange(1,len(seg)):
     MI[seg[i-1]:seg[i]]=seg[i-1]
+    print('    '+ str(seg[i]))
 
 sls_lse = np.cumsum(e**2)
-print('segmented RLS partition')
-print(seg)
+
+    
 
 
 
@@ -203,20 +205,23 @@ MM = np.zeros((N,))
 MMI = np.zeros((N,),dtype = 'int32')
 # Const = 1/mo*Const
 
-for i in np.arange(N):
-    for j in np.arange(i+1):
-        cost = E[:j+1,j] + Const + np.concatenate(([0],T[:j]) )
-        TI[j] = np.argmin(cost)
-        T[j] = cost[TI[j]]
-    MM[i]=T[i]
-    MMI[i]=TI[i]
+# for i in np.arange(N):
+#     for j in np.arange(i+1):
+#         cost = E[:j+1,j] + Const + np.concatenate(([0],T[:j]) )
+#         TI[j] = np.argmin(cost)
+#         T[j] = cost[TI[j]]
+#     MM[i]=T[i]
+#     MMI[i]=TI[i]
+[MM, MMI] = RS.Segmented_LS_Bellman_batch(E, Const)
+
 
 #%%segRLS-reset RLS
 alpha = 0.99
 ahat2 = np.zeros((mo,N))
 yhat2 = np.zeros((N,))
 R = np.eye(mo)
-print('Sequential RLS partition')
+seg = np.zeros((N,))
+seg_idx = 0
 for i in np.arange(N):
     if(i>=mo):
         C = y[i-mo:i].reshape((1,-1))
@@ -224,7 +229,8 @@ for i in np.arange(N):
         C = np.zeros((1,mo))
 
     if(i > 0 and ( (MMI[i]-MMI[i-1]) > 20 ) ):
-        print('    '+str(i))   
+        seg[seg_idx]=i
+        seg_idx+=1
         R = C.T.dot(C)+np.eye(mo)
     else:
         R = alpha*R + C.T.dot(C)
@@ -238,10 +244,25 @@ for i in np.arange(N):
     
     if(i%100 == 0):
         print('RLS2 iter: ' + str(i))
+        
+print('Sequential RLS partition')
+for i in np.arange(seg_idx):
+    print('    '+ str(seg[i]))
+
+
+[ahat2, SSLS_e, SSLS_seg]= RS.Sequential_Segmented_RLS(np.concatenate(([0], y[:-1])), y[:], mo, Const, 20, alpha)
+SSLS_lse = np.cumsum(SSLS_e**2)
+MMMI = np.zeros((N,))
+print('Sequential RLS partition - version J')
+for i in np.arange(1,len(SSLS_seg)):
+    MMMI[SSLS_seg[i-1]:SSLS_seg[i]]=SSLS_seg[i-1]
+    print('    '+ str(SSLS_seg[i]))
+    
 plt.figure()
 plt.plot(np.cumsum((y-yhat)**2)/np.arange(1,N+1),label = 'RLS memory 0.99')
 plt.plot(np.cumsum((y-yhat2)**2)/np.arange(1,N+1),label = 'Segmented RLS-informed RLS memory 0.99')
 plt.plot(sls_lse/np.arange(1,N+1),label = 'Optimal Segmented LS' )
+plt.plot(SSLS_lse/np.arange(1,N+1), label = 'Segmented RLS-informed RLS memory 0.99 - version J')
 plt.legend()
 plt.xlabel('Samples')
 plt.ylabel('Mean Squared Accumulated Prediction Error')
@@ -252,6 +273,7 @@ plt.figure()
 plt.plot(y, label = 'switching AR(2) process' )
 plt.plot(MI/50,label = 'optimal segmented least squares')
 plt.plot(-MMI/50, label = 'sequential segmented least squares')
+plt.plot(-MMMI/50, label = 'sequential segmented least squares - version J')
 plt.legend()
 plt.xlabel('Samples')
 plt.ylabel('piecewise stationary sequence / optimal segments')
