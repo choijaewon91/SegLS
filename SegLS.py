@@ -33,7 +33,7 @@ NN = np.zeros((np.shape(a)[0]+1,),dtype='int32')
 NN[0] = 0
 NNI = 1
 for i in np.arange(np.shape(a)[0]):
-    x = np.random.randn(XL)
+    x = np.random.normal(0,1,XL)
     y = np.concatenate((y,signal.lfilter([1.0],a[i,:],x)) )
     NN[NNI] = len(y)
     NNI+=1
@@ -60,7 +60,7 @@ for i in np.arange(mo):
 plt.show()
 
 #%%sls
-Const = (mo+1)**2*np.var(y)
+Const = (mo+2)*np.var(y)
 
 [seg, ahat_sls,e_sls,dhat1] = RS.Segmented_LS(np.concatenate(([0], y[:-1])), y[:], mo, Const)
 
@@ -98,7 +98,7 @@ for i in np.arange(1,len(SSLS_seg)):
     
     #%%plotting
 plt.figure()
-plt.plot(SSLS_lse/np.arange(1,N+1),'-y', label = 'sequential segmented RLS')
+plt.plot(SSLS_lse/np.arange(1,N+1),'-y', label = 'ORLS')
 plt.plot(sls_lse/np.arange(1,N+1),'-.b',label = 'Optimal Segmented LS' )
 plt.plot(srls_lse/np.arange(1,N+1),'--r',label = 'segmented RLS' )
 plt.plot(lse_rls/np.arange(1,N+1),':g',label = 'RLS memory 0.99')
@@ -113,7 +113,7 @@ plt.show()
 plt.figure()
 plt.plot(y, label = 'switching AR process' )
 plt.axvline(x = NN[0],color = 'k',label = 'true partition')
-plt.plot(-MMMI/50, '-y', label = 'sequential segmented RLS')
+plt.plot(-MMMI/50, '-y', label = 'ORLS')
 plt.plot(MI/50,'--r',label = 'segmented LS/RLS')
 
 
@@ -135,7 +135,7 @@ for i in np.arange(np.shape(a)[0]):
 plt.figure()
 for i in np.arange(mo):
     plt.subplot(mo,1,i+1)
-    plt.plot(ahat3[:,i], '-y',label = 'sequential segmented RLS')
+    plt.plot(ahat3[:,i], '-y',label = 'ORLS')
     plt.plot(ahat_sls[:,i], '-.b',label = 'optimal segmented LS')
     plt.plot(ahat_srls[:,i], '--r', label = 'segmented RLS')
     plt.plot(ahat1[:,i],    ':g',label = 'RLS memory 0.99')

@@ -151,7 +151,6 @@ def Segmented_LS(x, d, p, seg_penalty, x0 = None, verbose = False):
     for i in np.arange(1,len(seg)):
         seg_start_idx = seg[i-1]
         seg_end_idx = seg[i]
-        print(seg_start_idx)
             
         [w[seg_start_idx:seg_end_idx,:], e[seg_start_idx:seg_end_idx], _] = RLS_batch(x[seg_start_idx:seg_end_idx], d[seg_start_idx:seg_end_idx], p,1,x0=x_init)
         w[seg_start_idx:seg_end_idx,:]=w[seg_end_idx-1,:]
