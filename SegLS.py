@@ -33,7 +33,7 @@ NN = np.zeros((np.shape(a)[0]+1,),dtype='int32')
 NN[0] = 0
 NNI = 1
 for i in np.arange(np.shape(a)[0]):
-    x = np.random.normal(0,1,XL)
+    # x = np.random.normal(0,1,XL)
     y = np.concatenate((y,signal.lfilter([1.0],a[i,:],x)) )
     NN[NNI] = len(y)
     NNI+=1
@@ -49,7 +49,6 @@ C = np.zeros((1,mo))
 R= np.eye(mo)
 alpha = 0.99
 ahat=np.zeros((mo,N))
-yhat = np.zeros((N,))
 
 [ahat1, e_rls, lse_rls]= RS.RLS_batch( np.concatenate(([0], y[0:-1])), y[:], mo, alpha)
 x_arr= np.zeros((mo,))
@@ -60,7 +59,7 @@ for i in np.arange(mo):
 plt.show()
 
 #%%sls
-Const = (mo+2)*np.var(y)
+Const = (mo+3)*np.var(y)
 
 [seg, ahat_sls,e_sls,dhat1] = RS.Segmented_LS(np.concatenate(([0], y[:-1])), y[:], mo, Const)
 
@@ -86,7 +85,18 @@ srls_lse = np.cumsum(e_srls[:]**2)
 #srls_lse = np.cumsum((y[:]-dhat2)**2)    
 
 #%%
-[ahat3, SSLS_e, SSLS_seg]= RS.Sequential_Segmented_RLS(np.concatenate(([0], y[:-1])), y[:], mo, Const, 20, alpha)
+[ahat3, SSLS_e_old, SSLS_seg]= RS.Sequential_Segmented_RLS_old(np.concatenate(([0], y[:-1])), y[:], mo, Const, 20, alpha)
+SSLS_lse_old = np.cumsum(SSLS_e_old[:]**2)
+MMMI = np.zeros((N,))
+print('Sequential RLS partition - version Original')
+for i in np.arange(1,len(SSLS_seg)):
+    MMMI[SSLS_seg[i-1]:SSLS_seg[i]]=SSLS_seg[i-1]
+    print('    '+ str(SSLS_seg[i]))
+    
+    
+# [ahat3, SSLS_e, SSLS_seg]= RS.Sequential_Segmented_RLS(np.concatenate(([0], y[:-1])), y[:], mo, Const, 20, alpha)
+
+[ahat3, SSLS_e, SSLS_seg]= RS.Sequential_Segmented_RLS_LC(np.concatenate(([0], y[:-1])), y[:], mo, Const, 20, 50,alpha)
 SSLS_lse = np.cumsum(SSLS_e[:]**2)
 MMMI = np.zeros((N,))
 print('Sequential RLS partition - version J')
@@ -99,11 +109,14 @@ for i in np.arange(1,len(SSLS_seg)):
     #%%plotting
 plt.figure()
 plt.plot(SSLS_lse/np.arange(1,N+1),'-y', label = 'ORLS')
+plt.plot(SSLS_lse_old/np.arange(1,N+1),'-k', label = 'ORLS_original')
 plt.plot(sls_lse/np.arange(1,N+1),'-.b',label = 'Optimal Segmented LS' )
 plt.plot(srls_lse/np.arange(1,N+1),'--r',label = 'segmented RLS' )
 plt.plot(lse_rls/np.arange(1,N+1),':g',label = 'RLS memory 0.99')
+plt.plot(np.var(x)*np.ones((N,)),label = 'Signal Variance')
 
 plt.legend()
+plt.grid(axis ='y')
 plt.title('Mean Squared Accumulated Prediction Error')
 plt.xlabel('Samples')
 plt.ylabel('Mean Squared Error')
